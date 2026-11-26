@@ -41,7 +41,7 @@ python -m unittest discover -v
 
 ## How TCP and UDP look different in this project
 
-Set **Packet loss** to about 10% and watch the dashboard.
+
 
 | | UDP | TCP |
 |---|---|---|
@@ -54,14 +54,7 @@ Set **Packet loss** to about 10% and watch the dashboard.
 
 The key idea this demonstrates is **head-of-line blocking**. UDP drops data but stays current. TCP delivers everything but can stall.
 
-### Example result from a test run
 
-With 10% loss and 60 ms delay:
-
-- UDP lost about 8% of its packets and averaged about 55 ms delay.
-- TCP lost nothing, but averaged about 100 ms delay and had a longest wait of about 160 ms.
-
-Your numbers will differ a little on every run. The pattern should always be the same.
 
 ### Which one to use
 
