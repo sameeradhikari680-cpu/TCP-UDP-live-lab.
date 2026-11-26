@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TCP vs UDP Live Lab</title>
+<style>
+  :root {
+    --paper: #f2f4f7;
+    --panel: #ffffff;
+    --ink: #14213d;
+    --muted: #5b6577;
+    --rule: #d3d9e3;
+    --tcp: #1f4fd8;
+    --udp: #c2185b;
+    --pending: #dfe4ec;
+    --font-body: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-head: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #121826; --panel: #1a2234; --ink: #e8ecf5; --muted: #98a2b8;
+      --rule: #2c3750; --tcp: #6f93ff; --udp: #ff6fa3; --pending: #2b3550;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 15px/1.5 var(--font-body);
+    background-image: linear-gradient(var(--rule) 1px, transparent 1px), linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+    background-size: 32px 32px; background-position: -1px -1px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 48px; }
+  header { margin-bottom: 22px; max-width: 70ch; }
+  h1 { font: 600 34px/1.15 var(--font-head); margin: 0 0 6px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  .layout { display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 880px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; padding: 16px 18px; }
+  .panel h2 { font: 600 18px var(--font-head); margin: 0 0 10px; }
+
+  /* controls */
+  .ctl { margin-bottom: 14px; }
+  .ctl label { display: flex; justify-content: space-between; font-size: 14px; }
+  .ctl output { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .ctl small { display: block; color: var(--muted); font-size: 12.5px; }
+  input[type=range] { width: 100%; accent-color: var(--ink); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    font: inherit; padding: 7px 12px; border: 1px solid var(--ink); background: transparent;
+    color: var(--ink); border-radius: 3px; cursor: pointer;
+  }
+  button:hover { background: var(--ink); color: var(--paper); }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--tcp); outline-offset: 2px; }
+  button.primary { background: var(--ink); color: var(--paper); font-weight: 600; flex: 1; }
+  button.primary:hover { opacity: .88; }
+  .presets { margin: 4px 0 16px; }
+  .presets p { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+  .presets button { padding: 4px 9px; font-size: 13px; }
+
+  /* lanes */
+  .lane { margin-bottom: 20px; }
+  .lane-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .lane-head h2 { margin: 0; font-size: 26px; }
+  .lane-head span { color: var(--muted); font-size: 14px; }
+  .lane.tcp h2 { color: var(--tcp); }
+  .lane.udp h2 { color: var(--udp); }
+  .strip { display: flex; gap: 3px; height: 34px; margin-bottom: 14px; }
+  .strip i { flex: 1; border-radius: 2px; background: transparent; min-width: 0; }
+  .lane.tcp .strip i.o { background: var(--tcp); }
+  .lane.udp .strip i.o { background: var(--udp); }
+  .strip i.p { background: var(--pending); }
+  .strip i.r { background: repeating-linear-gradient(135deg, var(--c) 0 3px, var(--panel) 3px 6px); border: 1px solid var(--c); }
+  .lane.tcp .strip { --c: var(--tcp); }
+  .lane.udp .strip { --c: var(--udp); }
+  .strip i.l { border: 1.5px dashed var(--muted); background:
+      linear-gradient(to top right, transparent calc(50% - 1px), var(--muted) 50%, transparent calc(50% + 1px)),
+      linear-gradient(to bottom right, transparent calc(50% - 1px), var(--muted) 50%, transparent calc(50% + 1px)); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px 16px; margin: 0; }
+  .stats div { border-top: 1px solid var(--rule); padding-top: 6px; }
+  .stats dt { font-size: 12.5px; color: var(--muted); }
+  .stats dd { margin: 0; font: 600 22px var(--font-head); font-variant-numeric: tabular-nums; }
+  .stats dd small { font: 400 12.5px var(--font-body); color: var(--muted); }
+
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 16px; height: 12px; border-radius: 2px; }
+  .legend .k-o { background: var(--ink); }
+  .legend .k-p { background: var(--pending); }
+  .legend .k-r { border: 1px solid var(--ink); background: repeating-linear-gradient(135deg, var(--ink) 0 2px, var(--panel) 2px 4px); }
+  .legend .k-l { border: 1.5px dashed var(--muted); }
+
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 880px) { .charts { grid-template-columns: 1fr; } }
+  .chart h3 { font: 600 15px var(--font-body); margin: 0 0 2px; }
+  .chart p { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+  canvas { width: 100%; height: 190px; display: block; }
+  .key { display: flex; gap: 14px; font-size: 13px; margin-top: 6px; }
+  .key b { display: inline-block; width: 12px; height: 3px; margin-right: 6px; vertical-align: middle; }
+  .verdict { margin-top: 20px; border-left: 4px solid var(--ink); }
+  .verdict p { margin: 0 0 6px; max-width: 80ch; }
+  .verdict p:last-child { margin: 0; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>TCP vs UDP Live Lab</h1>
+    <p>The same numbered messages travel over a real TCP connection and real UDP datagrams through a link you control. Make the network worse and watch what each protocol does about it.</p>
+  </header>
+
+  <div class="layout">
+    <aside class="panel" aria-label="Network conditions">
+      <h2>Network conditions</h2>
+      <div class="row" style="margin-bottom:16px">
+        <button class="primary" id="run">Start sending</button>
+        <button id="reset">Reset</button>
+      </div>
+      <div class="presets">
+        <p>Quick scenarios</p>
+        <div class="row" id="presets"></div>
+      </div>
+      <div class="ctl"><label for="loss">Packet loss <output id="o-loss"></output></label>
+        <input id="loss" type="range" min="0" max="40" step="1"><small>Share of packets the network drops</small></div>
+      <div class="ctl"><label for="delay">Delay <output id="o-delay"></output></label>
+        <input id="delay" type="range" min="0" max="300" step="5"><small>One-way travel time</small></div>
+      <div class="ctl"><label for="jitter">Jitter <output id="o-jitter"></output></label>
+        <input id="jitter" type="range" min="0" max="150" step="5"><small>Random variation added to the delay</small></div>
+      <div class="ctl"><label for="rate">Send rate <output id="o-rate"></output></label>
+        <input id="rate" type="range" min="5" max="100" step="5"><small>Messages per second on each protocol</small></div>
+    </aside>
+
+    <main>
+      <p class="legend" aria-label="Packet strip legend">
+        <span><i class="k-o"></i>arrived in order</span>
+        <span><i class="k-p"></i>still waiting</span>
+        <span><i class="k-r"></i>arrived late, out of order</span>
+        <span><i class="k-l"></i>lost</span>
+        <span>newest message is on the right</span>
+      </p>
+
+      <section class="panel lane tcp" id="lane-tcp">
+        <div class="lane-head"><h2>TCP</h2><span>Reliable and ordered. Lost data is resent, and everything behind it waits.</span></div>
+        <div class="strip"></div>
+        <dl class="stats"></dl>
+      </section>
+
+      <section class="panel lane udp" id="lane-udp">
+        <div class="lane-head"><h2>UDP</h2><span>No guarantees. Each datagram travels alone.</span></div>
+        <div class="strip"></div>
+        <dl class="stats"></dl>
+      </section>
+
+      <section class="panel">
+        <div class="charts">
+          <div class="chart">
+            <h3>Slowest 5% of messages (ms)</h3>
+            <p>How long the unlucky messages waited, last 60 seconds</p>
+            <canvas id="c-lat" role="img" aria-label="Chart of 95th percentile latency for TCP and UDP"></canvas>
+          </div>
+          <div class="chart">
+            <h3>Messages received per second</h3>
+            <p>Steady for UDP, stop-and-burst for TCP when it is retransmitting</p>
+            <canvas id="c-tput" role="img" aria-label="Chart of messages received per second for TCP and UDP"></canvas>
+          </div>
+        </div>
+        <div class="key">
+          <span><b style="background:var(--tcp)"></b>TCP</span>
+          <span><b style="background:var(--udp)"></b>UDP</span>
+        </div>
+      </section>
+
+      <section class="panel verdict" aria-live="polite">
+        <p id="v-tcp">Press Start sending to begin.</p>
+        <p id="v-udp"></p>
+        <p id="v-take"></p>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+const PRESETS = {
+  "Clean link":  {loss: 0,  delay: 10,  jitter: 2,  rate: 20},
+  "Home Wi-Fi":  {loss: 2,  delay: 30,  jitter: 10, rate: 20},
+  "Mobile data": {loss: 5,  delay: 80,  jitter: 40, rate: 20},
+  "Bad link":    {loss: 15, delay: 120, jitter: 60, rate: 20},
+};
+const STATS = [
+  ["Delivered", s => s.recv, ""],
+  ["Lost", s => s.lost, ""],
+  ["Out of order", s => s.reordered, ""],
+  ["Typical delay", s => fmt(s.avg), "ms"],
+  ["Slowest 5%", s => fmt(s.p95), "ms"],
+  ["Jitter", s => fmt(s.jitter), "ms"],
+];
+const HIST = 120;
+const hist = {tcp: {lat: [], tput: []}, udp: {lat: [], tput: []}};
+const $ = id => document.getElementById(id);
+const fmt = v => v == null ? "–" : (v >= 100 ? Math.round(v) : v.toFixed(1));
+let state = {running: false}, firstEvent = true, timer = null;
+
+// build lanes
+for (const p of ["tcp", "udp"]) {
+  const lane = $("lane-" + p);
+  const strip = lane.querySelector(".strip");
+  for (let i = 0; i < 80; i++) strip.appendChild(document.createElement("i"));
+  lane.querySelector(".stats").innerHTML = STATS.map((s, i) =>
+    `<div><dt>${s[0]}</dt><dd id="${p}-s${i}">–</dd></div>`).join("");
+}
+$("presets").innerHTML = Object.keys(PRESETS).map(k => `<button data-k="${k}">${k}</button>`).join("");
+$("presets").onclick = e => {
+  const k = e.target.dataset.k; if (!k) return;
+  const p = PRESETS[k]; for (const f in p) $(f).value = p[f];
+  syncOutputs(); push();
+};
+
+const FIELDS = ["loss", "delay", "jitter", "rate"];
+const UNIT = {loss: "%", delay: " ms", jitter: " ms", rate: " /s"};
+function syncOutputs() { FIELDS.forEach(f => $("o-" + f).textContent = $(f).value + UNIT[f]); }
+function push(extra = {}) {
+  const body = {}; FIELDS.forEach(f => body[f] = +$(f).value); Object.assign(body, extra);
+  fetch("/config", {method: "POST", body: JSON.stringify(body)});
+}
+FIELDS.forEach(f => $(f).addEventListener("input", () => { syncOutputs(); clearTimeout(timer); timer = setTimeout(push, 80); }));
+$("run").onclick = () => { push({running: !state.running}); };
+$("reset").onclick = () => {
+  fetch("/reset", {method: "POST"});
+  for (const p in hist) { hist[p].lat = []; hist[p].tput = []; }
+  draw();
+};
+
+const es = new EventSource("/events");
+es.onmessage = ev => {
+  const d = JSON.parse(ev.data);
+  state = d.cfg;
+  if (firstEvent) { FIELDS.forEach(f => $(f).value = d.cfg[f]); syncOutputs(); firstEvent = false; }
+  $("run").textContent = d.cfg.running ? "Pause sending" : "Start sending";
+  for (const p of ["tcp", "udp"]) {
+    const s = d[p];
+    STATS.forEach((st, i) => {
+      let html = st[1](s);
+      if (p === "udp" && i === 1) html += ` <small>(${s.loss_pct.toFixed(1)}%)</small>`;
+      else if (st[2]) html += ` <small>${st[2]}</small>`;
+      $(`${p}-s${i}`).innerHTML = html;
+    });
+    const cells = $("lane-" + p).querySelectorAll(".strip i");
+    const strip = s.strip.padStart(80, ".");
+    cells.forEach((c, i) => { const ch = strip[i]; c.className = ch === "." ? "" : ch; });
+    const h = hist[p];
+    h.lat.push(s.win_p95); h.tput.push(s.tput);
+    if (h.lat.length > HIST) { h.lat.shift(); h.tput.shift(); }
+  }
+  draw(); verdict(d);
+};
+
+function verdict(d) {
+  const t = d.tcp, u = d.udp;
+  if (t.recv < 20) { if (t.sent) $("v-tcp").textContent = "Collecting data…"; return; }
+  $("v-tcp").textContent = `TCP delivered ${t.recv} messages, lost none, and kept them in order. Typical delay ${fmt(t.avg)} ms; the slowest 5% took over ${fmt(t.p95)} ms.`;
+  $("v-udp").textContent = `UDP delivered ${u.recv}, lost ${u.lost} (${u.loss_pct.toFixed(1)}%), and ${u.reordered} arrived out of order. Typical delay ${fmt(u.avg)} ms; the slowest 5% took over ${fmt(u.p95)} ms.`;
+  let take;
+  if (d.cfg.loss < 0.5 && d.cfg.jitter < 5) take = "On a clean link the two protocols look almost the same. The differences appear once the network starts dropping packets.";
+  else if (t.p95 > (u.p95 || 0) * 1.5) take = "Retransmissions made TCP stall: one delayed message holds back every message behind it. UDP skipped the gap and stayed current, but those packets are gone.";
+  else take = "Raise the packet loss to see TCP's cost: it trades delay for completeness, while UDP trades completeness for speed.";
+  $("v-take").textContent = take;
+}
+
+// charts
+function niceMax(m) {
+  if (m <= 0) return 10;
+  const p = Math.pow(10, Math.floor(Math.log10(m)));
+  for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= m) return k * p;
+  return m;
+}
+function drawChart(canvas, series) {
+  const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const c = canvas.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const css = getComputedStyle(document.documentElement);
+  const col = n => css.getPropertyValue(n).trim();
+  const pad = {l: 42, r: 6, t: 8, b: 18}, pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+  let mx = 0; series.forEach(s => s.data.forEach(v => { if (v != null && v > mx) mx = v; }));
+  mx = niceMax(mx);
+  c.font = "12px " + css.getPropertyValue("--font-body"); c.fillStyle = col("--muted"); c.strokeStyle = col("--rule"); c.lineWidth = 1;
+  c.textAlign = "right"; c.textBaseline = "middle";
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + ph - ph * i / 4;
+    c.beginPath(); c.moveTo(pad.l, y); c.lineTo(w - pad.r, y); c.stroke();
+    c.fillText(+(mx * i / 4).toFixed(1), pad.l - 6, y);
+  }
+  c.textAlign = "left"; c.textBaseline = "top";
+  c.fillText("60 s ago", pad.l, h - 14); c.textAlign = "right"; c.fillText("now", w - pad.r, h - 14);
+  const step = pw / (HIST - 1);
+  series.forEach(s => {
+    c.strokeStyle = col(s.color); c.lineWidth = 2; c.lineJoin = "round"; c.beginPath();
+    let pen = false;
+    s.data.forEach((v, i) => {
+      const x = pad.l + pw - (s.data.length - 1 - i) * step;
+      if (v == null) { pen = false; return; }
+      const y = pad.t + ph - ph * v / mx;
+      pen ? c.lineTo(x, y) : c.moveTo(x, y); pen = true;
+    });
+    c.stroke();
+  });
+}
+function draw() {
+  drawChart($("c-lat"), [{data: hist.tcp.lat, color: "--tcp"}, {data: hist.udp.lat, color: "--udp"}]);
+  drawChart($("c-tput"), [{data: hist.tcp.tput, color: "--tcp"}, {data: hist.udp.tput, color: "--udp"}]);
+}
+window.addEventListener("resize", draw);
+syncOutputs(); draw();
+</script>
+</body>
+</html>
